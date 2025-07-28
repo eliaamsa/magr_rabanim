@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מאגר מידע רבני קהילות</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+        }
+        
+        .marker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: rgba(255, 0, 0, 0.5);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: all 0.2s ease;
+        }
+        
+        .marker:hover, .marker.selected {
+            background-color: rgba(255, 0, 0, 0.8);
+            width: 24px;
+            height: 24px;
+            z-index: 10;
+        }
+        
+        .marker.has-data {
+            background-color: rgba(0, 128, 0, 0.5);
+        }
+        
+        .marker.has-data:hover, .marker.has-data.selected {
+            background-color: rgba(0, 128, 0, 0.8);
+        }
+        
+        .image-container {
+            position: relative;
+            overflow: auto;
+            max-width: 100%;
+            margin: 0 auto;
+        }
+        
+        .rabbi-image {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .marker-tooltip {
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            padding: 5px;
+            border-radius: 3px;
+            display: none;
+            z-index: 100;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.6);
+        }
+        
+        .modal-content {
+            position: relative;
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 700px;
+            border-radius: 8px;
+        }
+        
+        .close {
+            color: #aaa;
+            float: left;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .tab {
+            padding: 10px 15px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            margin-left: 5px;
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+        }
+        
+        .tab.active {
+            background-color: #fff;
+            border-color: #ddd;
+            border-bottom-color: transparent;
+            font-weight: bold;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            
+            .print-only {
+                display: block !important;
+            }
+            
+            .modal {
+                position: relative;
+                display: block;
+                background-color: white;
+                page-break-inside: avoid;
+            }
+            
+            .modal-content {
+                margin: 0;
+                width: 100%;
+                border: none;
+            }
+        }
+    </style>
+</head>
+<body class="p-4">
+    <div class="container mx-auto">
+        <header class="text-center py-6">
+            <h1 class="text-3xl font-bold mb-2">מאגר מידע רבני קהילות</h1>
+            <p class="text-lg text-gray-600 mb-4">מערכת אינטראקטיבית לזיהוי וניהול מידע של רבני קהילות</p>
+        </header>
+        
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">תמונה מרכזית</h2>
+                <div>
+                    <button id="add-marker-btn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mr-2 no-print">
+                        <i class="fas fa-plus mr-1"></i> הוסף נקודה
+                    </button>
+                    <button id="edit-mode-btn" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 mr-2 no-print">
+                        <i class="fas fa-edit mr-1"></i> מצב עריכה
+                    </button>
+                    <button id="view-all-btn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 no-print">
+                        <i class="fas fa-list mr-1"></i> הצג את כל הרבנים
+                    </button>
+                </div>
+            </div>
+            
+            <div class="image-container" id="image-container">
+                <img src="https://page.gensparksite.com/v1/base64_upload/9dde67678a6cc4cf2bc4ac6baa2f5afc" alt="תמונת רבני קהילות" class="rabbi-image" id="main-image">
+                <div id="markers-container"></div>
+            </div>
+            
+            <div class="mt-4 p-3 bg-blue-50 rounded-lg no-print" id="instruction-box">
+                <p class="text-blue-800"><i class="fas fa-info-circle mr-1"></i> <b>הוראות:</b> לחץ על "הוסף נקודה" ואז לחץ על התמונה כדי להוסיף נקודות זיהוי. לחץ על נקודה כדי לערוך או להציג את פרטי הרב.</p>
+            </div>
+        </div>
+        
+        <div class="print-only" style="display: none;" id="print-profiles-container">
+            <h2 class="text-2xl font-bold mb-4">רשימת הרבנים המזוהים</h2>
+            <div id="print-profiles-list"></div>
+        </div>
+    </div>
+    
+    <!-- Modal for Rabbi Profile -->
+    <div id="rabbi-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            
+            <div class="tabs">
+                <div class="tab active" data-tab="view">צפייה בפרופיל</div>
+                <div class="tab no-print" data-tab="edit">עריכת פרופיל</div>
+            </div>
+            
+            <div class="tab-content active" id="view-tab">
+                <h2 class="text-2xl font-bold mb-4" id="view-rabbi-name">פרטי רב</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <div class="mb-4" id="view-profile-image-container">
+                            <img id="view-profile-image" class="rounded-lg w-full h-auto max-h-64 object-cover hidden" alt="תמונת הרב">
+                        </div>
+                        <p><strong>שם הרב:</strong> <span id="view-name"></span></p>
+                        <p><strong>שם הרבנית:</strong> <span id="view-spouse"></span></p>
+                        <p><strong>תפקיד:</strong> <span id="view-role"></span></p>
+                        <p><strong>עיר ושכונה:</strong> <span id="view-location"></span></p>
+                    </div>
+                    <div>
+                        <p><strong>פרטי התקשרות:</strong></p>
+                        <p>טלפון: <span id="view-phone"></span></p>
+                        <p>אימייל: <span id="view-email"></span></p>
+                        <p><strong>קישורים לרשתות חברתיות:</strong></p>
+                        <div id="view-social"></div>
+                        <p><strong>תחומי פעילות מיוחדים:</strong></p>
+                        <p id="view-activities"></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-content no-print" id="edit-tab">
+                <h2 class="text-2xl font-bold mb-4">עריכת פרטי רב</h2>
+                <form id="rabbi-form">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <div class="mb-4">
+                                <label class="block mb-2">תמונה אישית (URL):</label>
+                                <input type="text" id="profile-image-url" class="w-full p-2 border rounded" placeholder="הכנס קישור לתמונה">
+                                <div class="mt-2">
+                                    <img id="profile-image-preview" class="rounded-lg w-full h-auto max-h-64 object-cover hidden" alt="תצוגה מקדימה">
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label class="block mb-2">שם הרב:</label>
+                                <input type="text" id="rabbi-name" class="w-full p-2 border rounded" required>
+                            </div>
+                            <div class="mb-4">
+                                <label class="block mb-2">שם הרבנית:</label>
+                                <input type="text" id="rabbi-spouse" class="w-full p-2 border rounded">
+                            </div>
+                            <div class="mb-4">
+                                <label class="block mb-2">תפקיד:</label>
+                                <input type="text" id="rabbi-role" class="w-full p-2 border rounded" placeholder="רב קהילת ..., ראש מוסד ...">
+                            </div>
+                            <div class="mb-4">
+                                <label class="block mb-2">עיר ושכונה:</label>
+                                <input type="text" id="rabbi-location" class="w-full p-2 border rounded">
+                            </div>
+                        </div>
+                        <div>
+                            <div class="mb-4">
+                                <label class="block mb-2">טלפון:</label>
+                                <input type="tel" id="rabbi-phone" class="w-full p-2 border rounded">
+                            </div>
+                            <div class="mb-4">
+                                <label class="block mb-2">אימייל:</label>
+                                <input type="email" id="rabbi-email" class="w-full p-2 border rounded">
+                            </div>
+                            <div class="mb-4">
+                                <label class="block mb-2">קישורים לרשתות חברתיות:</label>
+                                <input type="text" id="rabbi-social" class="w-full p-2 border rounded" placeholder="הפרד קישורים עם פסיקים">
+                            </div>
+                            <div class="mb-4">
+                                <label class="block mb-2">תחומי פעילות מיוחדים:</label>
+                                <textarea id="rabbi-activities" class="w-full p-2 border rounded h-32" placeholder="נישואין, כשרות, הרצאות לנוער וכו'"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-center mt-4">
+                        <button type="submit" class="bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600">שמור פרטים</button>
+                        <button type="button" id="delete-rabbi-btn" class="bg-red-500 text-white px-6 py-2 rounded hover:bg-red-600 mr-2">מחק</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal for All Rabbis List -->
+    <div id="all-rabbis-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 class="text-2xl font-bold mb-4">רשימת כל הרבנים</h2>
+            <div class="mb-4">
+                <input type="text" id="rabbi-search" class="w-full p-2 border rounded" placeholder="חיפוש לפי שם, תפקיד או מיקום">
+            </div>
+            <div class="overflow-auto max-h-96">
+                <table class="w-full border-collapse">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="border p-2 text-right">שם</th>
+                            <th class="border p-2 text-right">תפקיד</th>
+                            <th class="border p-2 text-right">מיקום</th>
+                            <th class="border p-2 text-right">פעולות</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rabbis-list">
+                        <!-- Rabbis will be listed here dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let markers = [];
+        let isAddingMarker = false;
+        let editMode = false;
+        let currentMarkerId = null;
+        
+        // DOM Elements
+        const imageContainer = document.getElementById('image-container');
+        const mainImage = document.getElementById('main-image');
+        const markersContainer = document.getElementById('markers-container');
+        const addMarkerBtn = document.getElementById('add-marker-btn');
+        const editModeBtn = document.getElementById('edit-mode-btn');
+        const viewAllBtn = document.getElementById('view-all-btn');
+        const rabbiModal = document.getElementById('rabbi-modal');
+        const allRabbisModal = document.getElementById('all-rabbis-modal');
+        const closeButtons = document.querySelectorAll('.close');
+        const rabbiForm = document.getElementById('rabbi-form');
+        const deleteRabbiBtn = document.getElementById('delete-rabbi-btn');
+        const tabs = document.querySelectorAll('.tab');
+        const profileImageUrl = document.getElementById('profile-image-url');
+        const profileImagePreview = document.getElementById('profile-image-preview');
+        const rabbiSearch = document.getElementById('rabbi-search');
+        const printProfilesContainer = document.getElementById('print-profiles-container');
+        const printProfilesList = document.getElementById('print-profiles-list');
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadMarkers();
+            renderMarkers();
+            updatePrintProfiles();
+            
+            // Event Listeners
+            addMarkerBtn.addEventListener('click', toggleAddMarkerMode);
+            editModeBtn.addEventListener('click', toggleEditMode);
+            viewAllBtn.addEventListener('click', openAllRabbisModal);
+            
+            mainImage.addEventListener('click', function(e) {
+                if (isAddingMarker) {
+                    addMarker(e);
+                }
+            });
+            
+            closeButtons.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    rabbiModal.style.display = 'none';
+                    allRabbisModal.style.display = 'none';
+                    currentMarkerId = null;
+                });
+            });
+            
+            window.addEventListener('click', function(e) {
+                if (e.target === rabbiModal) {
+                    rabbiModal.style.display = 'none';
+                    currentMarkerId = null;
+                }
+                if (e.target === allRabbisModal) {
+                    allRabbisModal.style.display = 'none';
+                }
+            });
+            
+            rabbiForm.addEventListener('submit', saveRabbiData);
+            deleteRabbiBtn.addEventListener('click', deleteRabbi);
+            
+            tabs.forEach(function(tab) {
+                tab.addEventListener('click', function() {
+                    const tabId = this.getAttribute('data-tab');
+                    activateTab(tabId);
+                });
+            });
+            
+            profileImageUrl.addEventListener('input', function() {
+                const url = this.value.trim();
+                if (url) {
+                    profileImagePreview.src = url;
+                    profileImagePreview.classList.remove('hidden');
+                } else {
+                    profileImagePreview.classList.add('hidden');
+                }
+            });
+            
+            rabbiSearch.addEventListener('input', function() {
+                renderRabbisList();
+            });
+        });
+        
+        // Functions
+        function toggleAddMarkerMode() {
+            isAddingMarker = !isAddingMarker;
+            editMode = false;
+            updateButtonStates();
+        }
+        
+        function toggleEditMode() {
+            editMode = !editMode;
+            isAddingMarker = false;
+            updateButtonStates();
+        }
+        
+        function updateButtonStates() {
+            if (isAddingMarker) {
+                addMarkerBtn.classList.add('bg-blue-700');
+                addMarkerBtn.classList.remove('bg-blue-500');
+                editModeBtn.classList.add('bg-yellow-500');
+                editModeBtn.classList.remove('bg-yellow-700');
+                imageContainer.style.cursor = 'crosshair';
+            } else {
+                addMarkerBtn.classList.add('bg-blue-500');
+                addMarkerBtn.classList.remove('bg-blue-700');
+                imageContainer.style.cursor = 'default';
+            }
+            
+            if (editMode) {
+                editModeBtn.classList.add('bg-yellow-700');
+                editModeBtn.classList.remove('bg-yellow-500');
+            } else {
+                editModeBtn.classList.add('bg-yellow-500');
+                editModeBtn.classList.remove('bg-yellow-700');
+            }
+        }
+        
+        function addMarker(e) {
+            const rect = mainImage.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            const newMarker = {
+                id: Date.now().toString(),
+                x: x,
+                y: y,
+                data: null
+            };
+            
+            markers.push(newMarker);
+            saveMarkers();
+            renderMarkers();
+            
+            isAddingMarker = false;
+            updateButtonStates();
+            
+            openRabbiModal(newMarker.id, true);
+        }
+        
+        function renderMarkers() {
+            markersContainer.innerHTML = '';
+            
+            markers.forEach(marker => {
+                const markerElement = document.createElement('div');
+                markerElement.className = `marker ${marker.data ? 'has-data' : ''}`;
+                markerElement.style.left = `${marker.x}%`;
+                markerElement.style.top = `${marker.y}%`;
+                markerElement.setAttribute('data-id', marker.id);
+                
+                markerElement.addEventListener('click', function() {
+                    if (editMode) {
+                        // Allow moving the marker in edit mode
+                        const markerId = this.getAttribute('data-id');
+                        startDraggingMarker(markerId);
+                    } else {
+                        // Open profile modal in normal mode
+                        const markerId = this.getAttribute('data-id');
+                        openRabbiModal(markerId, !getMarkerById(markerId).data);
+                    }
+                });
+                
+                if (marker.data && marker.data.name) {
+                    const tooltip = document.createElement('div');
+                    tooltip.className = 'marker-tooltip';
+                    tooltip.textContent = marker.data.name;
+                    
+                    markerElement.addEventListener('mouseenter', function() {
+                        tooltip.style.display = 'block';
+                    });
+                    
+                    markerElement.addEventListener('mouseleave', function() {
+                        tooltip.style.display = 'none';
+                    });
+                    
+                    markerElement.appendChild(tooltip);
+                }
+                
+                markersContainer.appendChild(markerElement);
+            });
+        }
+        
+        function startDraggingMarker(markerId) {
+            const marker = getMarkerById(markerId);
+            if (!marker) return;
+            
+            // Set current marker for moving
+            currentMarkerId = markerId;
+            
+            // Add event listeners for dragging
+            mainImage.addEventListener('mousemove', moveMarker);
+            mainImage.addEventListener('mouseup', stopDraggingMarker);
+            document.addEventListener('mouseup', stopDraggingMarker);
+        }
+        
+        function moveMarker(e) {
+            if (!currentMarkerId) return;
+            
+            const rect = mainImage.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            // Update marker position
+            const markerIndex = markers.findIndex(m => m.id === currentMarkerId);
+            if (markerIndex !== -1) {
+                markers[markerIndex].x = x;
+                markers[markerIndex].y = y;
+                
+                // Update visual marker
+                const markerElement = document.querySelector(`.marker[data-id="${currentMarkerId}"]`);
+                if (markerElement) {
+                    markerElement.style.left = `${x}%`;
+                    markerElement.style.top = `${y}%`;
+                }
+            }
+        }
+        
+        function stopDraggingMarker() {
+            if (currentMarkerId) {
+                saveMarkers();
+                currentMarkerId = null;
+                mainImage.removeEventListener('mousemove', moveMarker);
+                mainImage.removeEventListener('mouseup', stopDraggingMarker);
+                document.removeEventListener('mouseup', stopDraggingMarker);
+            }
+        }
+        
+        function getMarkerById(id) {
+            return markers.find(marker => marker.id === id);
+        }
+        
+        function openRabbiModal(markerId, editTab = false) {
+            currentMarkerId = markerId;
+            const marker = getMarkerById(markerId);
+            
+            if (editTab) {
+                activateTab('edit');
+                clearForm();
+                
+                if (marker.data) {
+                    // Fill form with existing data
+                    document.getElementById('rabbi-name').value = marker.data.name || '';
+                    document.getElementById('rabbi-spouse').value = marker.data.spouse || '';
+                    document.getElementById('rabbi-role').value = marker.data.role || '';
+                    document.getElementById('rabbi-location').value = marker.data.location || '';
+                    document.getElementById('rabbi-phone').value = marker.data.phone || '';
+                    document.getElementById('rabbi-email').value = marker.data.email || '';
+                    document.getElementById('rabbi-social').value = marker.data.social || '';
+                    document.getElementById('rabbi-activities').value = marker.data.activities || '';
+                    document.getElementById('profile-image-url').value = marker.data.imageUrl || '';
+                    
+                    if (marker.data.imageUrl) {
+                        profileImagePreview.src = marker.data.imageUrl;
+                        profileImagePreview.classList.remove('hidden');
+                    } else {
+                        profileImagePreview.classList.add('hidden');
+                    }
+                }
+            } else {
+                activateTab('view');
+                
+                if (marker.data) {
+                    // Fill view with data
+                    document.getElementById('view-rabbi-name').textContent = marker.data.name || 'פרטי רב';
+                    document.getElementById('view-name').textContent = marker.data.name || '';
+                    document.getElementById('view-spouse').textContent = marker.data.spouse || '';
+                    document.getElementById('view-role').textContent = marker.data.role || '';
+                    document.getElementById('view-location').textContent = marker.data.location || '';
+                    document.getElementById('view-phone').textContent = marker.data.phone || '';
+                    document.getElementById('view-email').textContent = marker.data.email || '';
+                    document.getElementById('view-activities').textContent = marker.data.activities || '';
+                    
+                    const viewProfileImage = document.getElementById('view-profile-image');
+                    if (marker.data.imageUrl) {
+                        viewProfileImage.src = marker.data.imageUrl;
+                        viewProfileImage.classList.remove('hidden');
+                    } else {
+                        viewProfileImage.classList.add('hidden');
+                    }
+                    
+                    // Handle social links
+                    const viewSocial = document.getElementById('view-social');
+                    viewSocial.innerHTML = '';
+                    
+                    if (marker.data.social) {
+                        const links = marker.data.social.split(',').map(link => link.trim());
+                        links.forEach(link => {
+                            if (link) {
+                                const a = document.createElement('a');
+                                a.href = link.startsWith('http') ? link : `https://${link}`;
+                                a.target = '_blank';
+                                a.className = 'text-blue-500 hover:underline block';
+                                a.textContent = a.href;
+                                viewSocial.appendChild(a);
+                            }
+                        });
+                    }
+                } else {
+                    // No data yet, switch to edit mode
+                    activateTab('edit');
+                    clearForm();
+                }
+            }
+            
+            rabbiModal.style.display = 'block';
+        }
+        
+        function clearForm() {
+            rabbiForm.reset();
+            profileImagePreview.classList.add('hidden');
+        }
+        
+        function activateTab(tabId) {
+            // Update tab buttons
+            tabs.forEach(tab => {
+                if (tab.getAttribute('data-tab') === tabId) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+            
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`${tabId}-tab`).classList.add('active');
+        }
+        
+        function saveRabbiData(e) {
+            e.preventDefault();
+            
+            if (!currentMarkerId) return;
+            
+            const markerIndex = markers.findIndex(m => m.id === currentMarkerId);
+            if (markerIndex === -1) return;
+            
+            // Get form data
+            const name = document.getElementById('rabbi-name').value;
+            const spouse = document.getElementById('rabbi-spouse').value;
+            const role = document.getElementById('rabbi-role').value;
+            const location = document.getElementById('rabbi-location').value;
+            const phone = document.getElementById('rabbi-phone').value;
+            const email = document.getElementById('rabbi-email').value;
+            const social = document.getElementById('rabbi-social').value;
+            const activities = document.getElementById('rabbi-activities').value;
+            const imageUrl = document.getElementById('profile-image-url').value;
+            
+            // Update marker data
+            markers[markerIndex].data = {
+                name,
+                spouse,
+                role,
+                location,
+                phone,
+                email,
+                social,
+                activities,
+                imageUrl
+            };
+            
+            saveMarkers();
+            renderMarkers();
+            updatePrintProfiles();
+            
+            // Switch to view tab
+            activateTab('view');
+            openRabbiModal(currentMarkerId, false);
+        }
+        
+        function deleteRabbi() {
+            if (!currentMarkerId) return;
+            
+            if (confirm('האם אתה בטוח שברצונך למחוק את פרטי הרב הזה?')) {
+                const markerIndex = markers.findIndex(m => m.id === currentMarkerId);
+                if (markerIndex !== -1) {
+                    markers.splice(markerIndex, 1);
+                    saveMarkers();
+                    renderMarkers();
+                    updatePrintProfiles();
+                    rabbiModal.style.display = 'none';
+                    currentMarkerId = null;
+                }
+            }
+        }
+        
+        function saveMarkers() {
+            localStorage.setItem('rabbiMarkers', JSON.stringify(markers));
+        }
+        
+        function loadMarkers() {
+            const savedMarkers = localStorage.getItem('rabbiMarkers');
+            if (savedMarkers) {
+                markers = JSON.parse(savedMarkers);
+            }
+        }
+        
+        function openAllRabbisModal() {
+            renderRabbisList();
+            allRabbisModal.style.display = 'block';
+        }
+        
+        function renderRabbisList() {
+            const rabbisList = document.getElementById('rabbis-list');
+            rabbisList.innerHTML = '';
+            
+            const searchTerm = (rabbiSearch.value || '').toLowerCase();
+            
+            const markersWithData = markers.filter(marker => marker.data && marker.data.name);
+            
+            // Sort by name
+            markersWithData.sort((a, b) => {
+                if (!a.data.name) return 1;
+                if (!b.data.name) return -1;
+                return a.data.name.localeCompare(b.data.name);
+            });
+            
+            markersWithData.forEach(marker => {
+                // Skip if doesn't match search
+                const nameMatch = marker.data.name && marker.data.name.toLowerCase().includes(searchTerm);
+                const roleMatch = marker.data.role && marker.data.role.toLowerCase().includes(searchTerm);
+                const locationMatch = marker.data.location && marker.data.location.toLowerCase().includes(searchTerm);
+                
+                if (searchTerm && !nameMatch && !roleMatch && !locationMatch) {
+                    return;
+                }
+                
+                const tr = document.createElement('tr');
+                
+                const nameTd = document.createElement('td');
+                nameTd.className = 'border p-2';
+                nameTd.textContent = marker.data.name || '-';
+                tr.appendChild(nameTd);
+                
+                const roleTd = document.createElement('td');
+                roleTd.className = 'border p-2';
+                roleTd.textContent = marker.data.role || '-';
+                tr.appendChild(roleTd);
+                
+                const locationTd = document.createElement('td');
+                locationTd.className = 'border p-2';
+                locationTd.textContent = marker.data.location || '-';
+                tr.appendChild(locationTd);
+                
+                const actionsTd = document.createElement('td');
+                actionsTd.className = 'border p-2';
+                
+                const viewBtn = document.createElement('button');
+                viewBtn.className = 'bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 ml-2';
+                viewBtn.innerHTML = '<i class="fas fa-eye"></i>';
+                viewBtn.addEventListener('click', function() {
+                    allRabbisModal.style.display = 'none';
+                    openRabbiModal(marker.id, false);
+                });
+                actionsTd.appendChild(viewBtn);
+                
+                const editBtn = document.createElement('button');
+                editBtn.className = 'bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600';
+                editBtn.innerHTML = '<i class="fas fa-edit"></i>';
+                editBtn.addEventListener('click', function() {
+                    allRabbisModal.style.display = 'none';
+                    openRabbiModal(marker.id, true);
+                });
+                actionsTd.appendChild(editBtn);
+                
+                tr.appendChild(actionsTd);
+                
+                rabbisList.appendChild(tr);
+            });
+            
+            if (markersWithData.length === 0) {
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = 4;
+                td.className = 'border p-4 text-center text-gray-500';
+                td.textContent = 'לא נמצאו רשומות';
+                tr.appendChild(td);
+                rabbisList.appendChild(tr);
+            }
+        }
+        
+        function updatePrintProfiles() {
+            printProfilesList.innerHTML = '';
+            
+            const markersWithData = markers.filter(marker => marker.data && marker.data.name);
+            
+            // Sort by name
+            markersWithData.sort((a, b) => {
+                if (!a.data.name) return 1;
+                if (!b.data.name) return -1;
+                return a.data.name.localeCompare(b.data.name);
+            });
+            
+            markersWithData.forEach(marker => {
+                if (!marker.data) return;
+                
+                const profileDiv = document.createElement('div');
+                profileDiv.className = 'bg-white rounded-lg shadow p-6 mb-6';
+                
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'border-b pb-4 mb-4';
+                
+                const name = document.createElement('h3');
+                name.className = 'text-xl font-bold';
+                name.textContent = marker.data.name || 'שם לא צוין';
+                headerDiv.appendChild(name);
+                
+                if (marker.data.role) {
+                    const role = document.createElement('p');
+                    role.className = 'text-gray-600';
+                    role.textContent = marker.data.role;
+                    headerDiv.appendChild(role);
+                }
+                
+                profileDiv.appendChild(headerDiv);
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'grid grid-cols-1 md:grid-cols-2 gap-6';
+                
+                const leftCol = document.createElement('div');
+                
+                if (marker.data.imageUrl) {
+                    const imgContainer = document.createElement('div');
+                    imgContainer.className = 'mb-4';
+                    
+                    const img = document.createElement('img');
+                    img.src = marker.data.imageUrl;
+                    img.className = 'rounded-lg w-full h-auto max-h-64 object-cover';
+                    img.alt = marker.data.name || 'תמונת הרב';
+                    
+                    imgContainer.appendChild(img);
+                    leftCol.appendChild(imgContainer);
+                }
+                
+                if (marker.data.spouse) {
+                    const spouse = document.createElement('p');
+                    spouse.className = 'mb-2';
+                    spouse.innerHTML = '<strong>שם הרבנית:</strong> ' + marker.data.spouse;
+                    leftCol.appendChild(spouse);
+                }
+                
+                if (marker.data.location) {
+                    const location = document.createElement('p');
+                    location.className = 'mb-2';
+                    location.innerHTML = '<strong>עיר ושכונה:</strong> ' + marker.data.location;
+                    leftCol.appendChild(location);
+                }
+                
+                contentDiv.appendChild(leftCol);
+                
+                const rightCol = document.createElement('div');
+                
+                if (marker.data.phone || marker.data.email) {
+                    const contactHeader = document.createElement('p');
+                    contactHeader.className = 'font-bold mb-2';
+                    contactHeader.textContent = 'פרטי התקשרות:';
+                    rightCol.appendChild(contactHeader);
+                    
+                    if (marker.data.phone) {
+                        const phone = document.createElement('p');
+                        phone.className = 'mb-1';
+                        phone.textContent = 'טלפון: ' + marker.data.phone;
+                        rightCol.appendChild(phone);
+                    }
+                    
+                    if (marker.data.email) {
+                        const email = document.createElement('p');
+                        email.className = 'mb-2';
+                        email.textContent = 'אימייל: ' + marker.data.email;
+                        rightCol.appendChild(email);
+                    }
+                }
+                
+                if (marker.data.social) {
+                    const socialHeader = document.createElement('p');
+                    socialHeader.className = 'font-bold mb-2 mt-3';
+                    socialHeader.textContent = 'קישורים לרשתות חברתיות:';
+                    rightCol.appendChild(socialHeader);
+                    
+                    const links = marker.data.social.split(',').map(link => link.trim());
+                    links.forEach(link => {
+                        if (link) {
+                            const linkP = document.createElement('p');
+                            linkP.className = 'mb-1';
+                            linkP.textContent = link;
+                            rightCol.appendChild(linkP);
+                        }
+                    });
+                }
+                
+                if (marker.data.activities) {
+                    const activitiesHeader = document.createElement('p');
+                    activitiesHeader.className = 'font-bold mb-2 mt-3';
+                    activitiesHeader.textContent = 'תחומי פעילות מיוחדים:';
+                    rightCol.appendChild(activitiesHeader);
+                    
+                    const activities = document.createElement('p');
+                    activities.textContent = marker.data.activities;
+                    rightCol.appendChild(activities);
+                }
+                
+                contentDiv.appendChild(rightCol);
+                profileDiv.appendChild(contentDiv);
+                
+                printProfilesList.appendChild(profileDiv);
+            });
+        }
+    </script>
+</body>
+</html>
